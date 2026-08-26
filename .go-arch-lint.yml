@@ -1,0 +1,36 @@
+version: 3
+workdir: .
+
+excludeFiles:
+  - "^.*_test\\.go$"
+
+vendors:
+  regexp2: { in: github.com/dlclark/regexp2/v2(/**)? }
+
+components:
+  # The Soros language interpreter: general regex-rewriting engine, no
+  # concept of numbers, currencies, or languages (see CLAUDE.md/AGENTS.md).
+  soros: { in: internal/soros }
+  # The public numbertext API and the locale registry/embeds.
+  numbertext: { in: "." }
+  # The CLI, a consumer of the public API like any other importer.
+  cmd: { in: "cmd/**" }
+
+commonComponents: []
+
+deps:
+  # soros knows nothing about numbertext, currencies, or any other
+  # package in this module. That is the whole point of keeping it under
+  # internal/ as a standalone interpreter (see CLAUDE.md). It may use
+  # regexp2 as its RE2-can't-express-this fallback (see regex.go).
+  soros:
+    canUse:
+      - regexp2
+
+  numbertext:
+    mayDependOn:
+      - soros
+
+  cmd:
+    mayDependOn:
+      - numbertext

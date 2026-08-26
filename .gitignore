@@ -1,0 +1,44 @@
+# If you prefer the allow list template instead of the deny list, see community template:
+# https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
+#
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Code coverage profiles and other test artifacts
+*.out
+coverage.*
+*.coverprofile
+profile.cov
+mutation.json
+
+# make build output
+/bin/
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# env file
+.env
+
+# Local working notes, not meant to be committed.
+NOTES.md
+TEMP.md
+
+# Claude Code. .claude/settings.json IS committed - it carries the project's
+# shared permission allowlist, derived from the Makefile targets. Anything
+# personal or machine-specific belongs in settings.local.json instead, so that
+# absolute paths and one-off approvals never reach the repository.
+.claude/settings.local.json
+
+# Editor/IDE
+# .idea/
+# .vscode/
+
+.DS_Store
