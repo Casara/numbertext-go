@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+# Read-only by default: nothing here writes to the repository, and a job
+# that later needs more should ask for it explicitly rather than inherit it.
+permissions:
+  contents: read
+
+# A new push to the same branch cancels the previous run. Not applied to
+# main, where every commit's result is worth keeping.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  test:
+    name: test (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 1.25 is the floor declared in go.mod (raised by adding
+        # github.com/dlclark/regexp2/v2 - the RE2-fallback engine in
+        # internal/soros/regex.go, which requires it) - running it proves
+        # the directive is honest, which is invisible when CI only ever
+        # uses the newest toolchain. "stable" catches breakage from a new
+        # release.
+        go:
+          - "1.25"
+          - stable
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - run: go vet ./...
+      - run: make test-race
+      - run: make test-select
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # Deliberately "stable", not go-version-file: go.mod (1.25, this
+      # project's declared floor - see the "test" job above): golangci-lint
+      # is a dev tool, not code this module ships, and its own go.mod floor
+      # moves independently of ours (v2.13 requires >= 1.26, which broke
+      # the "1.25" leg outright when lint ran there too - see AGENTS.md).
+      # Linting has no per-Go-version behavior worth matrixing anyway; it
+      # only needs to run once, on whatever's new enough to host it.
+      - uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: true
+
+      - run: make lint
+      - run: make arch-lint
+      - run: make verify-docs
+
+  vuln:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Reports only vulnerabilities reachable from this code. Runs on its
+      # own rather than inside `check` so that a newly disclosed advisory
+      # is distinguishable from a code failure.
+      - run: make vuln
+
+  markdown:
+    name: markdown lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+
+      # Deliberately `make lint-md` rather than markdownlint-cli2-action: it
+      # is the same pinned version contributors run locally, so the two
+      # cannot drift, and it inherits the NOTES.md exclusion.
+      - run: make lint-md
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: make coverage
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: coverage-html
+          path: coverage.html

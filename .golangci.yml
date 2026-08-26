@@ -1,0 +1,124 @@
+version: "2"
+
+linters:
+  # No `enable:` list here on purpose: with `default: all`, every linter is
+  # already on except what's listed in `disable` below.
+  default: all
+  disable:
+    # Package dependency boundaries are enforced by .go-arch-lint.yml
+    # instead, which expresses the allowed package graph directly rather
+    # than through a per-import allow-list.
+    - depguard
+    - gomodguard
+    # Both names exist in golangci-lint v2; disabling only one still leaves
+    # the other's whitespace-grouping opinions active.
+    - wsl_v5
+    - wsl
+    # golangci-lint v2.13 split exhaustruct into exhaustruct_v5 the same
+    # way; the deprecated original stays enabled under `default: all`
+    # too (not auto-excluded), and since it has no config of its own
+    # here it would otherwise re-flag everything exhaustruct_v5's
+    # settings below are excluding.
+    - exhaustruct
+    # The build-tag-based selective-embedding feature (see "Selecting which
+    # languages get embedded" in README.md) relies on an init() function per
+    # locale_<code>.go file to self-register into the package-level `reg`
+    # registry, regardless of which subset a build actually compiles.
+    - gochecknoinits
+    - gochecknoglobals
+    # Would require adding t.Parallel() throughout every table-driven test;
+    # not worth it for a library this size, where tests already run in
+    # well under a second serially.
+    - paralleltest
+  settings:
+    cyclop:
+      # Default: 10
+      max-complexity: 16
+    varnamelen:
+      # Default: 3
+      min-name-length: 2
+      # Names that are conventionally short throughout this codebase
+      # (single-letter loop/receiver variables in the Soros lexer/parser,
+      # `p *soros.Program`/`*Program` everywhere the compiled program is
+      # just passed through, `o *options` in the CLI).
+      ignore-decls:
+        - t testing.T
+        - i int
+        - n int
+        - n node
+        - o options
+        - o *options
+        - s string
+        - c byte
+        - r rule
+        - r rune
+        - v node
+        - v optionalNode
+        - b strings.Builder
+        - p *Program
+        - p *soros.Program
+        - m matcher
+    # exhaustruct_v5, not exhaustruct - see the disable list above. The
+    # field itself was also renamed: exclude -> ignore-patterns.
+    exhaustruct_v5:
+      ignore-patterns:
+        # Program's rules/Skipped start nil/empty and grow via Compile;
+        # there's no meaningful "value" to set them to at construction.
+        - '.*/soros\.Program$'
+        # pipeBefore/pipeAfter default false and are set later by
+        # attachPipes, never at the call site that builds the node.
+        - '.*/soros\.callNode$'
+        # mu is a sync.RWMutex: its zero value is the only valid initial
+        # value, it is never explicitly "set".
+        - '.*/numbertext-go\.registry$'
+    ireturn:
+      allow:
+        - anon
+        - error
+        - empty
+        - stdlib
+        - generic
+        # node is Soros's AST sum type (literal/backref/call/optional);
+        # every parser function that returns "the node it just parsed"
+        # necessarily returns this interface, not one concrete case.
+        - node
+        # matcher abstracts over *regexp.Regexp (the common case) and the
+        # regexp2 fallback (see regex.go) - compilePattern's whole point
+        # is to hide which one a caller got.
+        - matcher
+  exclusions:
+    rules:
+      # A CLI's whole job is printing to stdout/stderr, and its errors are
+      # numbertext's own already-good messages - reporting them as-is,
+      # unwrapped, is the correct behavior, not a lint finding.
+      - path: cmd/numbertext/main\.go
+        linters:
+          - forbidigo
+          - wrapcheck
+      # internal/soros's own tests deliberately stay in-package (not
+      # "_test") to exercise unexported parser/lexer internals directly
+      # (parseTemplate, hideEscapes, the node types); there is no public
+      # API for an external test package to reach them through.
+      - path: internal/soros/.*_test\.go
+        linters:
+          - testpackage
+      # Table-driven test cases deliberately set only the fields a given
+      # case exercises (e.g. options{lang: "en", cardinal: "21"}); forcing
+      # every field would just be noise repeated across every row.
+      - path: _test\.go
+        linters:
+          - exhaustruct_v5
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  # Default: 50
+  max-issues-per-linter: 0
+  # Default: 3
+  max-same-issues: 0
+
+run:
+  timeout: 5m
